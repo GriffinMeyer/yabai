@@ -1,3 +1,8 @@
+> **macOS 27 preparation fork:** The `macos27-ready` branch includes the pinned
+> community scripting-addition fixes through `992eff0`. See [MACOS27.md](MACOS27.md)
+> for provenance, build instructions, activation into `~/.local/bin`, validation,
+> rollback, and known limitations. Building does not activate this installation.
+
 <!-- Please be careful editing the below HTML, as GitHub is quite finicky with anything that looks like an HTML tag in GitHub Flavored Markdown. -->
 <p align="center">
   <img width="75%" src="assets/banner/banner.svg" alt="Banner">

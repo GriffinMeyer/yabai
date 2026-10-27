@@ -46,17 +46,14 @@ fi
 
 [ -x "$BIN_SRC" ] || { echo "error: $BIN_SRC not built — run 'make' first" >&2; exit 1; }
 
-echo "==> stopping any existing service"
-yabai --stop-service 2>/dev/null || true
-yabai --uninstall-service 2>/dev/null || true
-
-echo "==> installing $BIN_SRC -> $BIN_DST"
-mkdir -p "$PREFIX/bin"
-rm -f "$BIN_DST"                      # clear any prior symlink (e.g. from a dev `ln -s`)
-cp "$BIN_SRC" "$BIN_DST"
+# Sign a staged copy before touching the installed binary or its service. A missing
+# certificate must not leave the user without their currently working yabai.
+stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/yabai-install.XXXXXX")"
+trap 'rm -rf "$stage_dir"' EXIT
+cp "$BIN_SRC" "$stage_dir/yabai"
 
 echo "==> codesigning with '$YABAI_CERT' (stable identity -> Accessibility persists across rebuilds)"
-if ! codesign -fs "$YABAI_CERT" "$BIN_DST" 2>/dev/null; then
+if ! codesign -fs "$YABAI_CERT" "$stage_dir/yabai" 2>/dev/null; then
   cat >&2 <<EOF
 error: code-signing identity '$YABAI_CERT' not found or unusable.
 Create a self-signed Code Signing certificate once, then re-run:
@@ -64,10 +61,21 @@ Create a self-signed Code Signing certificate once, then re-run:
     Name: $YABAI_CERT   Identity Type: Self Signed Root   Certificate Type: Code Signing
 (or point at another identity with YABAI_CERT=...)
 EOF
-  rm -f "$BIN_DST"
   exit 1
 fi
-codesign --verify --verbose "$BIN_DST"
+codesign --verify --verbose "$stage_dir/yabai"
+
+# Check sudo access before stopping the service, too.
+sudo -v
+
+echo "==> stopping any existing service"
+yabai --stop-service 2>/dev/null || true
+yabai --uninstall-service 2>/dev/null || true
+
+echo "==> installing $BIN_SRC -> $BIN_DST"
+mkdir -p "$PREFIX/bin"
+rm -f "$BIN_DST"                      # clear any prior symlink (e.g. from a dev `ln -s`)
+cp "$stage_dir/yabai" "$BIN_DST"
 
 echo "==> refreshing $SUDOERS (passwordless --load-sa, pinned to the SIGNED binary's hash)"
 hash="$(shasum -a 256 "$BIN_DST" | cut -d' ' -f1)"
